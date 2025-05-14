@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 
 N_MAX = 50  # Ajustez selon vos besoins
+HIGHLIGHT_BG = '#ffcdd2'
 
 def generer_lignes():
     # Lecture et validation du nombre de lignes à générer
@@ -35,44 +36,44 @@ def generer_lignes():
             row_entries.append(ent)
         rows.append(row_entries)
 
-    btn_import.config(state='disabled')
+    validate_all()  # Met à jour l’état du bouton et surbrillance
 
 def validate_all():
-    """Valide toutes les entrées et active/désactive le bouton d'import."""
-    all_valid = True
+    """Valide le fournisseur et toutes les lignes, et active/désactive 'Lancer'."""
+    # Validation du champ Fournisseur
+    supp = entry_fournisseur.get().strip()
+    valid_supp = bool(supp) and len(supp) <= 100
+    if not valid_supp:
+        entry_fournisseur.configure(bg=HIGHLIGHT_BG)
+    else:
+        entry_fournisseur.configure(bg=entry_fournisseur.default_bg)
 
+    # Validation des lignes
+    all_valid = valid_supp
     for row in rows:
         # Récupération des valeurs
         ref, prix_str, qte_str, poids_str = [ent.get().strip() for ent in row]
 
-        # Validation Référence (alphanumérique non vide)
         valid_ref = bool(ref and ref.isalnum())
-
-        # Validation Prix (float ou entier)
         try:
-            _ = float(prix_str)
+            float(prix_str)
             valid_prix = True
         except ValueError:
             valid_prix = False
-
-        # Validation Quantité (int)
         valid_qte = qte_str.isdigit() and bool(qte_str)
-
-        # Validation Poids (float ou entier)
         try:
-            _ = float(poids_str)
+            float(poids_str)
             valid_poids = True
         except ValueError:
             valid_poids = False
 
-        # Surbrillance seulement si non vide ET invalide
+        # Surbrillance seulement si non vide et invalide
         for ent, valid in zip(row, [valid_ref, valid_prix, valid_qte, valid_poids]):
             if ent.get().strip() and not valid:
-                ent.configure(bg='#ffcdd2')
+                ent.configure(bg=HIGHLIGHT_BG)
             else:
                 ent.configure(bg=ent.default_bg)
 
-        # Si un champ est vide ou invalide, bloque la ligne
         if not (valid_ref and valid_prix and valid_qte and valid_poids):
             all_valid = False
 
@@ -80,10 +81,12 @@ def validate_all():
     btn_import.config(state=('normal' if all_valid and rows else 'disabled'))
 
 def lancer_script():
-    """Prépare et lance le script d'import (stub pour l'instant)."""
+    """Prépare et lance le script d'import (stub)."""
+    fournisseur = entry_fournisseur.get().strip()
     data = []
     for row in rows:
         data.append({
+            'fournisseur': fournisseur,
             'référence': row[0].get().strip(),
             'prix': float(row[1].get().strip()),
             'quantité': int(row[2].get().strip()),
@@ -97,25 +100,35 @@ def lancer_script():
 root = tk.Tk()
 root.title("Import de références vinyles")
 
-# Frame pour le nombre de produits
-frame_haut = tk.Frame(root, padx=10, pady=10)
-frame_haut.pack(fill='x')
+# Fournisseur en haut
+frame_fourn = tk.Frame(root, padx=10, pady=5)
+frame_fourn.pack(fill='x')
+tk.Label(frame_fourn, text="Fournisseur :").grid(row=0, column=0)
+entry_fournisseur = tk.Entry(frame_fourn, width=30)
+entry_fournisseur.grid(row=0, column=1, padx=5)
+entry_fournisseur.default_bg = entry_fournisseur.cget('bg')
+entry_fournisseur.bind("<KeyRelease>", lambda e: validate_all())
 
+# Nombre de produits
+frame_haut = tk.Frame(root, padx=10, pady=5)
+frame_haut.pack(fill='x')
 tk.Label(frame_haut, text="Nombre de produits à traiter :").grid(row=0, column=0)
 entry_nombre = tk.Entry(frame_haut, width=5)
 entry_nombre.grid(row=0, column=1, padx=5)
 tk.Button(frame_haut, text="Générer", command=generer_lignes).grid(row=0, column=2)
 
-# Frame pour les lignes de données
+# Zone des lignes
 frame_lignes = tk.Frame(root, padx=10, pady=10)
 frame_lignes.pack(fill='both', expand=True)
+rows = []
 
-rows = []  # Liste des lignes d'Entry
-
-# Bouton Lancer en bas
+# Bouton Lancer
 frame_bas = tk.Frame(root, pady=10)
 frame_bas.pack()
 btn_import = tk.Button(frame_bas, text="Lancer", state='disabled', command=lancer_script)
 btn_import.pack()
+
+# Initialisation de l’état
+validate_all()
 
 root.mainloop()
