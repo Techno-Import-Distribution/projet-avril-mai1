@@ -1,4 +1,4 @@
-from selenium import webdriver
+from seleniumwire import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
@@ -12,15 +12,21 @@ import time
 
 
 def setup_driver():
-    service = Service(ChromeDriverManager().install())
     options = webdriver.ChromeOptions()
+    options.add_argument("--headless")
     options.add_argument("--disable-blink-features=AutomationControlled")
-    return webdriver.Chrome(service=service, options=options)
+
+    # Retourne un driver selenium-wire
+    return webdriver.Chrome(
+        service=Service(ChromeDriverManager().install()),
+        options=options,
+        seleniumwire_options={}  # Important pour activer les fonctionnalités réseau
+    )
 
 
 def accept_cookies(driver):
     try:
-        WebDriverWait(driver, 5).until(
+        WebDriverWait(driver, 1 ).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Accept')]"))
         ).click()
     except:
@@ -53,19 +59,19 @@ def get_first_product_link(driver, query):
     driver.get("https://www.deejay.de")
     accept_cookies(driver)
 
-    search_box = WebDriverWait(driver, 10).until(
+    search_box = WebDriverWait(driver, 1).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, "input#ftAutocomplete"))
     )
     search_box.send_keys(query + Keys.RETURN)
     time.sleep(3)
 
-    iframe = WebDriverWait(driver, 10).until(
+    iframe = WebDriverWait(driver, 1).until(
         EC.presence_of_element_located((By.XPATH, "//iframe[@id='myIframe']"))
     )
     driver.switch_to.frame(iframe)
 
     try:
-        first_product = WebDriverWait(driver, 10).until(
+        first_product = WebDriverWait(driver, 1).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "article.product:first-of-type a[href^='/']"))
         )
         product_link = first_product.get_attribute('href')
@@ -82,21 +88,21 @@ def create_reference_folder(reference):
         os.makedirs(folder_path)
     return folder_path
 
-def extract_main_product_details(driver, product_url):
+def extract_main_product_details(driver, product_url,ref):
     driver.get(product_url)
     time.sleep(3)
 
     try:
-        iframe = WebDriverWait(driver, 10).until(
+        iframe = WebDriverWait(driver, 1).until(
             EC.presence_of_element_located((By.XPATH, "//iframe[@id='myIframe']"))
         )
         driver.switch_to.frame(iframe)
 
         # Cibler spécifiquement le PREMIER article seulement
-        main_article = WebDriverWait(driver, 10).until(
+        main_article = WebDriverWait(driver, 1).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "article.single_product"))
         )
-        folder_path = create_reference_folder("SK11X031")
+        folder_path = create_reference_folder(ref)
 
         image_elements = main_article.find_elements(By.CSS_SELECTOR, "div.cover img[src]")
         for i, img in enumerate(image_elements, 1):
@@ -109,26 +115,28 @@ def extract_main_product_details(driver, product_url):
         audio_urls = []
 
         for i, track in enumerate(track_elements, 1):
-            # Utiliser JavaScript pour cliquer directement sur l'élément
+
+
+            # Nettoyer les requêtes précédentes
+            driver.requests.clear()
+
+            # Clic via JavaScript pour déclencher le player
             driver.execute_script("arguments[0].click();", track)
-            time.sleep(2)  # Attendre que le lecteur se charge
+            time.sleep(3)  # Attendre que le son se charge et que les requêtes soient faites
 
-            # Trouver l'élément audio avec JavaScript
-            audio_element = driver.execute_script(
-                "return document.querySelector('audio');"
-            )
 
-            if audio_element:
-                audio_url = audio_element.get_attribute('src')
-                if audio_url and audio_url.endswith('.mp3'):
-                    audio_urls.append(audio_url)
-                    success = download_file(audio_url, folder_path, f"piste_{i}.mp3")
-                    if not success:
-                        print(f"Échec du téléchargement de la piste {i}")
-                else:
-                    print(f"URL audio non valide pour la piste {i}")
+            # Filtrer toutes les requêtes MP3 faites après le clic
+            mp3_requests = [r for r in driver.requests if r.response and r.url.endswith(".mp3")]
+
+            if mp3_requests:
+                last_mp3 = mp3_requests[-1].url
+                audio_urls.append(last_mp3)
+
+                success = download_file(last_mp3, folder_path, f"piste_{i}.mp3")
+                if not success:
+                    print(f"Échec du téléchargement de la piste {i}")
             else:
-                print(f"Élément audio non trouvé pour la piste {i}")
+                print(f" Aucun MP3 détecté pour la piste {i}")
 
         details = {
             'artist': main_article.find_element(By.CSS_SELECTOR, "div.artist").text,
@@ -151,6 +159,7 @@ def extract_main_product_details(driver, product_url):
 
 
 def main():
+    start_time = time.time()
     driver = setup_driver()
     try:
         references = ["SK11X031"]
@@ -164,10 +173,9 @@ def main():
                 print(f"Aucun produit trouvé pour {ref}")
                 continue
 
-            product_data = extract_main_product_details(driver, product_url)
+            product_data = extract_main_product_details(driver, product_url,ref)
 
             if product_data:
-                print("\nRÉSULTAT (ARTICLE PRINCIPAL):")
                 print(f"Artiste: {product_data['artist']}")
                 print(f"Titre: {product_data['title']}")
                 print(f"Prix: {product_data['price']}")
@@ -184,6 +192,10 @@ def main():
 
     finally:
         driver.quit()
+
+    end_time = time.time()  # Capturer le temps à la fin
+    execution_time = end_time - start_time  # Calculer la durée d'exécution
+    print(f"\nTemps d'exécution total : {execution_time:.2f} secondes")
 
 
 if __name__ == "__main__":
