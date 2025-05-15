@@ -12,21 +12,31 @@ import time
 
 
 def setup_driver():
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless")
-    options.add_argument("--disable-blink-features=AutomationControlled")
 
-    # Retourne un driver selenium-wire
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless=new")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--start-maximized")
+    options.add_argument("--disable-dev-shm-usage")
+
+    chromedriver_path = os.path.join(os.path.dirname(__file__), "chromedriver")
+    if os.name == "nt":
+        chromedriver_path += ".exe"  # Windows
     return webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
+        service = Service(executable_path=chromedriver_path),
         options=options,
-        seleniumwire_options={}  # Important pour activer les fonctionnalités réseau
+        seleniumwire_options={
+            'disable_encoding': True,  # Accélère un peu
+            'request_storage_base_dir': '/tmp/selenium',  # Réduit I/O
+            'request_storage': 'memory',  # Pas d'écriture disque
+        }
     )
 
 
 def accept_cookies(driver):
     try:
-        WebDriverWait(driver, 1 ).until(
+        WebDriverWait(driver, 5 ).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Accept')]"))
         ).click()
     except:
@@ -59,19 +69,19 @@ def get_first_product_link(driver, query):
     driver.get("https://www.deejay.de")
     accept_cookies(driver)
 
-    search_box = WebDriverWait(driver, 1).until(
+    search_box = WebDriverWait(driver, 3).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, "input#ftAutocomplete"))
     )
     search_box.send_keys(query + Keys.RETURN)
-    time.sleep(3)
 
-    iframe = WebDriverWait(driver, 1).until(
+
+    iframe = WebDriverWait(driver, 3).until(
         EC.presence_of_element_located((By.XPATH, "//iframe[@id='myIframe']"))
     )
     driver.switch_to.frame(iframe)
 
     try:
-        first_product = WebDriverWait(driver, 1).until(
+        first_product = WebDriverWait(driver, 3).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "article.product:first-of-type a[href^='/']"))
         )
         product_link = first_product.get_attribute('href')
@@ -90,16 +100,16 @@ def create_reference_folder(reference):
 
 def extract_main_product_details(driver, product_url,ref):
     driver.get(product_url)
-    time.sleep(3)
+
 
     try:
-        iframe = WebDriverWait(driver, 1).until(
+        iframe = WebDriverWait(driver, 3).until(
             EC.presence_of_element_located((By.XPATH, "//iframe[@id='myIframe']"))
         )
         driver.switch_to.frame(iframe)
 
         # Cibler spécifiquement le PREMIER article seulement
-        main_article = WebDriverWait(driver, 1).until(
+        main_article = WebDriverWait(driver, 3).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "article.single_product"))
         )
         folder_path = create_reference_folder(ref)
@@ -122,7 +132,8 @@ def extract_main_product_details(driver, product_url,ref):
 
             # Clic via JavaScript pour déclencher le player
             driver.execute_script("arguments[0].click();", track)
-            time.sleep(3)  # Attendre que le son se charge et que les requêtes soient faites
+            time.sleep(1)  # Attendre que le son se charge et que les requêtes soient faites
+
 
 
             # Filtrer toutes les requêtes MP3 faites après le clic
@@ -138,16 +149,20 @@ def extract_main_product_details(driver, product_url,ref):
             else:
                 print(f" Aucun MP3 détecté pour la piste {i}")
 
+
+        description_elem = main_article.find_elements(By.CSS_SELECTOR, "div.description p")
+        description = description_elem[0].text if description_elem else ""
         details = {
             'artist': main_article.find_element(By.CSS_SELECTOR, "div.artist").text,
             'title': main_article.find_element(By.CSS_SELECTOR, "div.title").text,
             'price': main_article.find_element(By.CSS_SELECTOR, "span.price").text,
-            'tracks': [t.text for t in main_article.find_elements(By.CSS_SELECTOR, "ul.playtrack li")],
-            'description': main_article.find_element(By.CSS_SELECTOR, "div.description p").text,
+            "tracks": [t.text for t in main_article.find_elements(By.CSS_SELECTOR, "ul.playtrack li")],
+            'description': description,
             'url': product_url,
             'image' : image_elements is not None,
             'audio' : track_elements is not None,
         }
+
 
         driver.switch_to.default_content()
         return details
@@ -162,7 +177,7 @@ def main():
     start_time = time.time()
     driver = setup_driver()
     try:
-        references = ["SK11X031"]
+        references = [ "PRRUKBLK127","PRRUKWHT008","REVENGE4","SOMALP128","SUPERSTYLE001","T3R016","TPTX006","TRI003","VAULTTREC006"]
 
         for ref in references:
             print(f"\n=== TRAITEMENT DE {ref} ===")
@@ -176,13 +191,9 @@ def main():
             product_data = extract_main_product_details(driver, product_url,ref)
 
             if product_data:
-                print(f"Artiste: {product_data['artist']}")
-                print(f"Titre: {product_data['title']}")
-                print(f"Prix: {product_data['price']}")
+                print(f"Artiste***Titre: {product_data['artist']}***{product_data['title']}")
                 print(f"Description: {product_data['description']}")
-                print("Pistes:")
-                print(f"Image: {product_data['image']}")
-                print(f"Audio: {product_data['audio']}")
+                print("")
                 for i, track in enumerate(product_data['tracks'], 1):
                     print(f"{i}. {track}")
             else:
