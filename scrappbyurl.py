@@ -132,7 +132,7 @@ def extract_main_product_details(driver, product_url,ref):
 
             # Clic via JavaScript pour déclencher le player
             driver.execute_script("arguments[0].click();", track)
-            time.sleep(1)  # Attendre que le son se charge et que les requêtes soient faites
+            time.sleep(3)  # Attendre que le son se charge et que les requêtes soient faites
 
 
 
@@ -143,7 +143,7 @@ def extract_main_product_details(driver, product_url,ref):
                 last_mp3 = mp3_requests[-1].url
                 audio_urls.append(last_mp3)
 
-                success = download_file(last_mp3, folder_path, f"piste_{i}.mp3")
+                success = download_file(last_mp3, folder_path,  os.path.basename(last_mp3))
                 if not success:
                     print(f"Échec du téléchargement de la piste {i}")
             else:
@@ -177,12 +177,12 @@ def main():
     start_time = time.time()
     driver = setup_driver()
     try:
-        references = ["VAULTTREC006"]
+        references = ["POSS-012C_"]
 
         for ref in references:
             print(f"\n=== TRAITEMENT DE {ref} ===")
 
-            product_url = "https://www.deejay.de/Hurdslenk_The_Myst_VAULTREC006_Vinyl__1141389"
+            product_url = "https://www.deejay.de/Various_Various_Artists_2_-_EP3_POSS-012C_Vinyl__1149100"
 
             if not product_url:
                 print(f"Aucun produit trouvé pour {ref}")

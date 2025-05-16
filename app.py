@@ -132,7 +132,7 @@ def extract_main_product_details(driver, product_url,ref):
 
             # Clic via JavaScript pour déclencher le player
             driver.execute_script("arguments[0].click();", track)
-            time.sleep(1)  # Attendre que le son se charge et que les requêtes soient faites
+            time.sleep(3)  # Attendre que le son se charge et que les requêtes soient faites
 
 
 
@@ -143,7 +143,7 @@ def extract_main_product_details(driver, product_url,ref):
                 last_mp3 = mp3_requests[-1].url
                 audio_urls.append(last_mp3)
 
-                success = download_file(last_mp3, folder_path, f"piste_{i}.mp3")
+                success = download_file(last_mp3, folder_path, os.path.basename(last_mp3))
                 if not success:
                     print(f"Échec du téléchargement de la piste {i}")
             else:
@@ -177,7 +177,7 @@ def main():
     start_time = time.time()
     driver = setup_driver()
     try:
-        references = [ "PRRUKBLK127","PRRUKWHT008","REVENGE4","SOMALP128","SUPERSTYLE001","T3R016","TPTX006","TRI003","VAULTTREC006"]
+        references = [ "OTP02","OTP03","OYTVIN04","PI06","POSS-009","POSS-011","PRRUKBLK044","PRRUKBLK053","PRRUKBLK127","PRRUKWHT008","REVENGE4","SOMALP128","SUPERSTYLE001","T3R016","TPTX006","TRI003","VAULTREC006"]
 
         for ref in references:
             print(f"\n=== TRAITEMENT DE {ref} ===")
