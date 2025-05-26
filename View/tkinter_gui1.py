@@ -1,13 +1,11 @@
 import tkinter as tk
 from tkinter import messagebox
-from controleur.controller import lancer_script  # Ta fonction déplacée
 
-N_MAX = 50
+N_MAX = 50  # Ajustez selon vos besoins
 HIGHLIGHT_BG = '#ffcdd2'
 
 def generer_lignes():
-    global rows
-    # Validation du nombre
+    # Lecture et validation du nombre de lignes à générer
     try:
         nb = int(entry_nombre.get())
         if nb < 1 or nb > N_MAX:
@@ -17,9 +15,9 @@ def generer_lignes():
         return
 
     # Nettoyage de l'ancienne grille
-    for w in frame_lignes.winfo_children():
-        w.destroy()
-    rows = []
+    for widget in frame_lignes.winfo_children():
+        widget.destroy()
+    rows.clear()
 
     # Création de l'en-tête
     headers = ["Référence", "Prix", "Quantité", "Poids"]
@@ -27,8 +25,8 @@ def generer_lignes():
         lbl = tk.Label(frame_lignes, text=h, font=('Arial', 10, 'bold'))
         lbl.grid(row=0, column=j, padx=5, pady=2)
 
-    # Création des lignes
-    for i in range(1, nb+1):
+    # Création des lignes d'entrée
+    for i in range(1, nb + 1):
         row_entries = []
         for j in range(4):
             ent = tk.Entry(frame_lignes, width=15)
@@ -38,11 +36,11 @@ def generer_lignes():
             row_entries.append(ent)
         rows.append(row_entries)
 
-    validate_all()
+    validate_all()  # Met à jour l’état du bouton et surbrillance
 
 def validate_all():
-    """Valide le fournisseur + chaque ligne, gère la surbrillance et l'état du bouton."""
-    # 1) Validation du Fournisseur
+    """Valide le fournisseur et toutes les lignes, et active/désactive 'Lancer'."""
+    # Validation du champ Fournisseur
     supp = entry_fournisseur.get().strip()
     valid_supp = bool(supp) and len(supp) <= 100
     if not valid_supp:
@@ -50,25 +48,26 @@ def validate_all():
     else:
         entry_fournisseur.configure(bg=entry_fournisseur.default_bg)
 
-    # 2) Validation des lignes
+    # Validation des lignes
     all_valid = valid_supp
     for row in rows:
-        ref_str, prix_str, qte_str, poids_str = [e.get().strip() for e in row]
+        # Récupération des valeurs
+        ref, prix_str, qte_str, poids_str = [ent.get().strip() for ent in row]
 
-        valid_ref   = bool(ref_str and ref_str.isalnum())
+        valid_ref = bool(ref and ref.isalnum())
         try:
             float(prix_str)
             valid_prix = True
         except ValueError:
             valid_prix = False
-        valid_qte   = qte_str.isdigit() and bool(qte_str)
+        valid_qte = qte_str.isdigit() and bool(qte_str)
         try:
             float(poids_str)
             valid_poids = True
         except ValueError:
             valid_poids = False
 
-        # Surbrillance champs invalides (seulement s’ils sont non vides)
+        # Surbrillance seulement si non vide et invalide
         for ent, valid in zip(row, [valid_ref, valid_prix, valid_qte, valid_poids]):
             if ent.get().strip() and not valid:
                 ent.configure(bg=HIGHLIGHT_BG)
@@ -78,21 +77,30 @@ def validate_all():
         if not (valid_ref and valid_prix and valid_qte and valid_poids):
             all_valid = False
 
-    # 3) Activation / désactivation du bouton
+    # Activation / désactivation du bouton "Lancer"
     btn_import.config(state=('normal' if all_valid and rows else 'disabled'))
 
-def on_lancer_click():
-    """Wrapper UI : appelle le contrôleur et notifie."""
+def lancer_script():
+    """Prépare et lance le script d'import (stub)."""
     fournisseur = entry_fournisseur.get().strip()
-    data = lancer_script(fournisseur, rows)
-    print("Données stockées pour le modèle :", data)
-    messagebox.showinfo("Import", "Les données sont stockées et prêtes pour le modèle.")
+    data = []
+    for row in rows:
+        data.append({
+            'fournisseur': fournisseur,
+            'référence': row[0].get().strip(),
+            'prix': float(row[1].get().strip()),
+            'quantité': int(row[2].get().strip()),
+            'poids': float(row[3].get().strip())
+        })
+    print("Données prêtes à l'import :", data)
+    messagebox.showinfo("Import", "Les données sont prêtes à être importées.")
 
-# --- Construction de l'UI ---
+# --- Construction de l'interface ---
+
 root = tk.Tk()
 root.title("Import de références vinyles")
 
-# Fournisseur
+# Fournisseur en haut
 frame_fourn = tk.Frame(root, padx=10, pady=5)
 frame_fourn.pack(fill='x')
 tk.Label(frame_fourn, text="Fournisseur :").grid(row=0, column=0)
@@ -117,9 +125,10 @@ rows = []
 # Bouton Lancer
 frame_bas = tk.Frame(root, pady=10)
 frame_bas.pack()
-btn_import = tk.Button(frame_bas, text="Lancer", state='disabled', command=on_lancer_click)
+btn_import = tk.Button(frame_bas, text="Lancer", state='disabled', command=lancer_script)
 btn_import.pack()
 
-# Initialisation de l'état
+# Initialisation de l’état
 validate_all()
+
 root.mainloop()

@@ -177,7 +177,7 @@ def main():
     start_time = time.time()
     driver = setup_driver()
     try:
-        references = [ "OTP02","OTP03","OYTVIN04","PI06","POSS-009","POSS-011","PRRUKBLK044","PRRUKBLK053","PRRUKBLK127","PRRUKWHT008","REVENGE4","SOMALP128","SUPERSTYLE001","T3R016","TPTX006","TRI003","VAULTREC006"]
+        references = [ "LAX12INCH103"]
 
         for ref in references:
             print(f"\n=== TRAITEMENT DE {ref} ===")
