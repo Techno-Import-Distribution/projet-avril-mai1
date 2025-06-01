@@ -9,6 +9,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # Importe les classes Model et View
 from Model.model import ScraperModel
 from View.view import ScraperView
+from Model.prestashop_api import create_product_prestashop, update_quantity, upload_product_image
 
 
 class ScraperController:
@@ -115,29 +116,69 @@ class ScraperController:
     def _run_scraper_in_thread(self, references):
         """
         Exécute le script de scraping (modèle) dans un thread séparé.
-        Met à jour l'interface utilisateur une fois le scraping terminé.
+        Pour chaque scraping réussi, crée le produit sur PrestaShop.
         """
         try:
-            # Passe une fonction de callback au modèle pour les mises à jour de progression
             results = self.model.scrape_references(references, progress_callback=self._update_progress)
+            # Récupère les infos GUI pour faire la fusion
+            product_data_gui = self.view.get_references_data()
+            # Boucle sur chaque résultat du scraping
+            for res in results:
+                if res.get('status') == 'Succès' and res.get('data'):
+                    # Trouve la ligne correspondante dans la GUI (par la référence)
+                    ref = res['reference']
+                    gui_line = next((item for item in product_data_gui if item['référence'] == ref), None)
+                    if not gui_line:
+                        print(f"Impossible de faire correspondre la référence {ref} avec les données GUI.")
+                        continue
+                    # Prépare les données à envoyer à PrestaShop
+                    artist = res['data'].get('artist', '')
+                    title = res['data'].get('title', '')
+                    data_api = {
+                        'reference': ref,
+                        'price': gui_line['prix'],
+                        'weight': gui_line['poids'],
+                        'quantity': gui_line['quantité'],
+                        'name': f"{artist}***{title}",
+                        'description': res['data'].get('description', ''),
+                        # Catégorie par défaut (2)
+                        'category_id': 2,
+                    }
+                    # Appel API création produit
+                    new_id = create_product_prestashop(data_api)
+                    if new_id:
+                        print(f"Produit PrestaShop créé avec ID {new_id} pour référence {ref}")
+                        try:
+                            update_quantity(new_id, gui_line['quantité'])
+                        except Exception as e:
+                            print(f"Erreur lors de la mise à jour du stock pour {ref}: {e}")
 
-            # Utilise root.after pour s'assurer que les mises à jour de l'interface se font dans le thread principal
+                        # --- Upload des images associées à la référence ---
+                        images_folder = os.path.join(os.getcwd(), ref)
+                        if os.path.isdir(images_folder):
+                            for filename in os.listdir(images_folder):
+                                filepath = os.path.join(images_folder, filename)
+                                _, ext = os.path.splitext(filename.lower())
+                                if os.path.isfile(filepath) and ext in {'.jpg', '.jpeg', '.png', '.gif', '.bmp'}:
+                                    try:
+                                        print(f"Upload de l'image '{filename}' pour le produit {new_id}…")
+                                        upload_product_image(new_id, filepath)
+                                    except Exception as e:
+                                        print(f"Erreur lors de l'upload de '{filename}' pour {ref} : {e}")
+                                else:
+                                    print(f"Ignoré (extension non prise en charge ou non fichier) : '{filename}'")
+                        else:
+                            print(f"Pas de dossier d'images pour la référence {ref}.")
+                    else:
+                        print(f"Échec de la création du produit PrestaShop pour référence {ref}")
+
+
+            # Suite inchangée : callback pour mise à jour de la GUI, etc.
             self.root.after(0, self._on_scraping_complete, results)
         except Exception as e:
-            self.root.after(0, self.view.show_error, "Erreur Scraping",
-                            f"Une erreur est survenue lors du scraping : {e}")
+            self.root.after(0, self.view.show_error, "Erreur Scraping+API",
+                            f"Une erreur est survenue lors du scraping+API : {e}")
             self.root.after(0, self.view.set_launch_button_state, 'normal')  # Réactive le bouton en cas d'erreur
-
-    def _update_progress(self, message):
-        """
-        Callback pour mettre à jour l'interface avec la progression du scraping.
-        Doit être appelé via root.after si appelé depuis un thread secondaire.
-        """
-        # Pour l'instant, nous affichons simplement dans la console.
-        # Pour une interface plus riche, on pourrait mettre à jour un Label ou une barre de progression.
-        print(f"Progression: {message}")
-        # Exemple de mise à jour de l'interface (nécessiterait un Label de statut dans la vue)
-        # self.root.after(0, lambda: self.view.update_status_label(message))
 
     def _on_scraping_complete(self, results):
         """
@@ -150,4 +191,12 @@ class ScraperController:
         self.view.set_launch_button_state('normal')  # Réactive le bouton
         # Ici, vous pourriez aussi afficher les résultats détaillés dans l'interface si désiré
         print("Résultats du scraping :", results)
+
+    def _update_progress(self, message):
+        """
+        Callback pour mettre à jour la progression du scraping/API.
+        Actuellement affiche dans la console.
+        """
+        print(f"Progression: {message}")
+        # Pour améliorer, tu pourrais mettre à jour un Label dans la GUI ici
 
