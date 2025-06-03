@@ -31,6 +31,15 @@ def fill_product_schema(schema_xml, data):
     prod.find('price').text     = str(data['price'])
     prod.find('weight').text    = str(data['weight'])
     prod.find('active').text    = '1'
+    if prod.find('available_for_order') is None:
+        ET.SubElement(prod, 'available_for_order').text = '1'
+    else:
+        prod.find('available_for_order').text = '1'
+
+    if prod.find('show_price') is None:
+        ET.SubElement(prod, 'show_price').text = '1'
+    else:
+        prod.find('show_price').text = '1'
     # Catégorie par défaut (2)
     prod.find('id_category_default').text = str(data.get('category_id', 2))
 

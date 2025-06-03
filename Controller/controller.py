@@ -60,8 +60,7 @@ class ScraperController:
             row_entries = self.view.rows[i]
 
             # Validation de la référence: non vide et alphanumérique
-            valid_ref = bool(row_data['référence']) and re.fullmatch(r'^[a-zA-Z0-9]+$',
-                                                                     row_data['référence']) is not None
+            valid_ref = bool(row_data['référence']) and re.fullmatch(r'^[a-zA-Z0-9\-]+$', row_data['référence']) is not None
             self.view.highlight_entry(row_entries[0], valid_ref)
 
             # Validation du prix: non vide et convertible en float
@@ -100,7 +99,7 @@ class ScraperController:
         # Extrait seulement les références valides pour le scraping
         references_to_scrape = [
             item['référence'] for item in product_data
-            if item['référence'] and re.fullmatch(r'^[a-zA-Z0-9]+$', item['référence']) is not None
+            if item['référence'] and re.fullmatch(r'^[a-zA-Z0-9\-]+$', item['référence']) is not None
         ]
 
         if not references_to_scrape:
