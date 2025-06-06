@@ -3,13 +3,25 @@ import sys
 import os
 import re  # Pour la validation des références
 
-# Ajoute le répertoire courant au chemin Python pour les importations locales
+# On ajoute le répertoire courant au path Python pour pouvoir importer localement
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Importe les classes Model et View
+# Import des classes Model et View
 from Model.model import ScraperModel
 from View.view import ScraperView
 from Model.prestashop_api import create_product_prestashop, update_quantity, upload_product_image
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dictionnaire de correspondance "Type GUI" → "ID de catégorie enfant" PrestaShop
+# ─────────────────────────────────────────────────────────────────────────────
+CATEGORY_MAP = {
+    "Techno / Electro"              : 59,
+    "Drum & Bass / Jungle / Dubstep" : 33,
+    "House / Deep House"            : 29,
+    "Hardtek / Acidcore / Tribe"    : 35,
+    "Hardcore / Gabber"             : 30,
+    "Minimal / Micro House"         : 28
+}
 
 
 class ScraperController:
@@ -20,10 +32,10 @@ class ScraperController:
 
     def __init__(self, root):
         self.root = root
-        self.model = ScraperModel()  # Instancie le modèle
-        self.view = ScraperView(root)  # Instancie la vue
-        self.view.set_controller(self)  # Lie la vue au contrôleur
-        self.view._create_widgets()  # Initialise les composants de l'interface
+        self.model = ScraperModel()               # Instancie le modèle
+        self.view = ScraperView(root)             # Instancie la vue
+        self.view.set_controller(self)            # Lie la vue au contrôleur
+        self.view._create_widgets()               # Initialise les composants de l'interface
 
     def generate_lines_command(self):
         """
@@ -56,11 +68,11 @@ class ScraperController:
 
         # Validation des lignes de produits
         for i, row_data in enumerate(product_data):
-            # Récupération des widgets Entry pour la ligne courante
+            # Récupère les widgets Entry pour la ligne courante
             row_entries = self.view.rows[i]
 
             # Validation de la référence: non vide et alphanumérique
-            valid_ref = bool(row_data['référence']) and re.fullmatch(r'^[a-zA-Z0-9\-]+$', row_data['référence']) is not None
+            valid_ref = bool(row_data['référence']) and re.fullmatch(r'^[a-zA-Z0-9\-.]+$', row_data['référence']) is not None
             self.view.highlight_entry(row_entries[0], valid_ref)
 
             # Validation du prix: non vide et convertible en float
@@ -77,9 +89,15 @@ class ScraperController:
 
             # Validation du type: doit être l’une des 6 options
             t = row_data.get('type', "")
-            valid_type = t in ["Techno / Electro", "Drum & Bass / Jungle / Dubstep", "House / Deep House", "Hardtek / Acidcore / Tribe", "Hardcore / Gabber", "Minimal / Micro House"]
+            valid_type = t in [
+                "Techno / Electro",
+                "Drum & Bass / Jungle / Dubstep",
+                "House / Deep House",
+                "Hardtek / Acidcore / Tribe",
+                "Hardcore / Gabber",
+                "Minimal / Micro House"
+            ]
             self.view.highlight_entry(row_entries[4], valid_type)
-
 
             if not (valid_ref and valid_prix and valid_qte and valid_poids and valid_type):
                 all_product_rows_valid = False
@@ -99,7 +117,7 @@ class ScraperController:
         # Extrait seulement les références valides pour le scraping
         references_to_scrape = [
             item['référence'] for item in product_data
-            if item['référence'] and re.fullmatch(r'^[a-zA-Z0-9\-]+$', item['référence']) is not None
+            if item['référence'] and re.fullmatch(r'^[a-zA-Z0-9\-.]+$', item['référence']) is not None
         ]
 
         if not references_to_scrape:
@@ -121,6 +139,7 @@ class ScraperController:
             results = self.model.scrape_references(references, progress_callback=self._update_progress)
             # Récupère les infos GUI pour faire la fusion
             product_data_gui = self.view.get_references_data()
+
             # Boucle sur chaque résultat du scraping
             for res in results:
                 if res.get('status') == 'Succès' and res.get('data'):
@@ -130,19 +149,29 @@ class ScraperController:
                     if not gui_line:
                         print(f"Impossible de faire correspondre la référence {ref} avec les données GUI.")
                         continue
-                    # Prépare les données à envoyer à PrestaShop
+
+                    # Récupère le titre/artiste depuis le scraping
                     artist = res['data'].get('artist', '')
-                    title = res['data'].get('title', '')
+                    title  = res['data'].get('title', '')
+
+                    # ─── Partie clé : construction des catégories dynamiques ────────────
+                    type_label = gui_line.get('type', '')
+                    # On récupère l’ID enfant correspondant, fallback à 1 (Home) si introuvable
+                    cat_child_id = CATEGORY_MAP.get(type_label, 1)
+                    # Toujours cocher Home (1) + VINYLS (26) + la catégorie enfant choisie
+                    cats_to_send = [1, 26, cat_child_id]
+
+                    # Prépare les données à envoyer à PrestaShop, dont la liste 'category_ids'
                     data_api = {
-                        'reference': ref,
-                        'price': gui_line['prix'],
-                        'weight': gui_line['poids'],
-                        'quantity': gui_line['quantité'],
-                        'name': f"{artist}***{title}",
-                        'description': res['data'].get('description', ''),
-                        # Catégorie par défaut (2)
-                        'category_id': 2,
+                        'reference'   : ref,
+                        'price'       : gui_line['prix'],
+                        'weight'      : gui_line['poids'],
+                        'quantity'    : gui_line['quantité'],
+                        'name'        : f"{artist}***{title}",
+                        'description' : res['data'].get('description', ''),
+                        'category_ids': cats_to_send
                     }
+
                     # Appel API création produit
                     new_id = create_product_prestashop(data_api)
                     if new_id:
@@ -152,7 +181,7 @@ class ScraperController:
                         except Exception as e:
                             print(f"Erreur lors de la mise à jour du stock pour {ref}: {e}")
 
-                        # --- Upload des images associées à la référence ---
+                        # ─── Upload des images associées à la référence ────────────────
                         images_folder = os.path.join(os.getcwd(), ref)
                         if os.path.isdir(images_folder):
                             for filename in os.listdir(images_folder):
@@ -171,13 +200,14 @@ class ScraperController:
                     else:
                         print(f"Échec de la création du produit PrestaShop pour référence {ref}")
 
-
-            # Suite inchangée : callback pour mise à jour de la GUI, etc.
+            # Quand tout est fini, on appelle le callback pour mettre à jour le GUI
             self.root.after(0, self._on_scraping_complete, results)
+
         except Exception as e:
+            # En cas d’erreur globale, on affiche un message et on réactive le bouton
             self.root.after(0, self.view.show_error, "Erreur Scraping+API",
                             f"Une erreur est survenue lors du scraping+API : {e}")
-            self.root.after(0, self.view.set_launch_button_state, 'normal')  # Réactive le bouton en cas d'erreur
+            self.root.after(0, self.view.set_launch_button_state, 'normal')
 
     def _on_scraping_complete(self, results):
         """
@@ -187,8 +217,7 @@ class ScraperController:
         success_count = sum(1 for r in results if r.get('status') == 'Succès')
         total_count = len(results)
         self.view.show_message("Scraping Terminé", f"Scraping terminé pour {success_count}/{total_count} références.")
-        self.view.set_launch_button_state('normal')  # Réactive le bouton
-        # Ici, vous pourriez aussi afficher les résultats détaillés dans l'interface si désiré
+        self.view.set_launch_button_state('normal')
         print("Résultats du scraping :", results)
 
     def _update_progress(self, message):
@@ -197,5 +226,4 @@ class ScraperController:
         Actuellement affiche dans la console.
         """
         print(f"Progression: {message}")
-        # Pour améliorer, tu pourrais mettre à jour un Label dans la GUI ici
-
+        # Si vous voulez afficher la progression dans l'interface, vous pouvez mettre à jour un Label ici
